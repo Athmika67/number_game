@@ -54,8 +54,8 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
   final List<EdgeInsets> numberPaddings = [
     EdgeInsets.only(left: 24.0, top: 28.0),
     EdgeInsets.only(left: 30.0, top: 50.0),
-    EdgeInsets.only(left: 20.0, top: 100.0),
-    EdgeInsets.only(left: 0.0, top: 150.0),
+    EdgeInsets.only(left: 20.0, top: 98.0),
+    EdgeInsets.only(left: 0.0, top: 146.0),
   ];
 
   // Track selected letters for swapping
@@ -457,6 +457,7 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
     SystemChannels.textInput.invokeMethod('TextInput.hide');
 
     return Scaffold(
+      backgroundColor: Color(0xFFF5F5F7),
       // Disable resizeToAvoidBottomInset to prevent keyboard from pushing up content
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
@@ -626,14 +627,7 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
               ),
             ),
             SizedBox(height: 8),
-            Text(
-              "Letters in correct position (dark blue) can't be swapped.",
-              style: TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: Colors.blue[700],
-              ),
-            ),
+            // Removed the Text widget that contained "Letters in correct position (dark blue) can't be swapped."
             firstSelectedPosition != null
                 ? Text(
               "Select another letter to swap...",
