@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 // Define letter position class at the top level
 class LetterPosition {
@@ -9,6 +10,9 @@ class LetterPosition {
 }
 
 void main() {
+  // Add focus handlers to ensure keyboard never shows
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChannels.textInput.invokeMethod('TextInput.hide');
   runApp(MyApp());
 }
 
@@ -30,7 +34,7 @@ class NumberMatchingGame extends StatefulWidget {
   _NumberMatchingGameState createState() => _NumberMatchingGameState();
 }
 
-class _NumberMatchingGameState extends State<NumberMatchingGame> {
+class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBindingObserver {
   final List<Map<String, dynamic>> numberData = [
     {"number": "29.8%", "answer": "RENEWABLE"},
     {"number": "11 M \n tons", "answer": "PLASTIC"},
@@ -65,18 +69,10 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
-    // Initialize letter values storage
-    letterValues = List.generate(
-        4, // Number of columns (words)
-            (i) => List.generate(maxRows, (_) => "")
-    );
-
-    // Initialize letter grid with nulls
-    letterGrid = List.generate(
-        maxRows,
-            (_) => List.generate(4, (_) => null)
-    );
+    // Force hide keyboard when app initializes
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
 
     // Initialize selected cells tracking
     selectedCells = List.generate(
@@ -84,115 +80,8 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
             (_) => List.generate(4, (_) => false)
     );
 
-    // Set up the grid layout - initially just arrange letters vertically by word
-    for (int wordIndex = 0; wordIndex < numberData.length; wordIndex++) {
-      String word = numberData[wordIndex]["answer"];
-      for (int letterIndex = 0; letterIndex < word.length; letterIndex++) {
-        // Only assign valid letter positions
-        if (letterIndex < maxRows) {
-          letterGrid[letterIndex][wordIndex] = LetterPosition(wordIndex, letterIndex);
-          letterValues[wordIndex][letterIndex] = word[letterIndex];
-        }
-      }
-    }
-
-    // Shuffle the E of RENEWABLE (2nd letter) with P of PLASTIC (1st letter)
-    // Save the original positions
-    LetterPosition? tempE = letterGrid[1][0]; // E from RENEWABLE (second letter, first column)
-    LetterPosition? tempP = letterGrid[0][1]; // P from PLASTIC (first letter, second column)
-
-    // Swap them
-    if (tempE != null && tempP != null) {
-      letterGrid[1][0] = tempP; // Put P in RENEWABLE's E position
-      letterGrid[0][1] = tempE; // Put E in PLASTIC's P position
-    }
-
-    // NEW SWAP: Shuffle the N of RENEWABLE (3rd letter) with L of PLASTIC (2nd letter) and F of FOREST (1st letter)
-    // Save the original positions
-    LetterPosition? tempN = letterGrid[2][0]; // N from RENEWABLE (third letter, first column)
-    LetterPosition? tempL = letterGrid[1][1]; // L from PLASTIC (second letter, second column)
-    LetterPosition? tempF = letterGrid[0][2]; // F from FOREST (first letter, third column)
-
-    // Swap them in a circular fashion: N -> L -> F -> N
-    if (tempN != null && tempL != null && tempF != null) {
-      letterGrid[2][0] = tempL; // Put L in RENEWABLE's N position
-      letterGrid[1][1] = tempF; // Put F in PLASTIC's L position
-      letterGrid[0][2] = tempN; // Put N in FOREST's F position
-    }
-
-    // ADDITIONAL SWAP: Shuffle the 4th letter of RENEWABLE, 3rd letter of PLASTIC, 2nd letter of FOREST, and 1st letter of SEA
-    // Save the original positions
-    LetterPosition? tempW = letterGrid[3][0]; // W from RENEWABLE (fourth letter, first column)
-    LetterPosition? tempA = letterGrid[2][1]; // A from PLASTIC (third letter, second column)
-    LetterPosition? tempO = letterGrid[1][2]; // O from FOREST (second letter, third column)
-    LetterPosition? tempS = letterGrid[0][3]; // S from SEA (first letter, fourth column)
-
-    // Swap them in a circular fashion: W -> A -> O -> S -> W
-    if (tempW != null && tempA != null && tempO != null && tempS != null) {
-      letterGrid[3][0] = tempA; // Put A in RENEWABLE's W position
-      letterGrid[2][1] = tempO; // Put O in PLASTIC's A position
-      letterGrid[1][2] = tempS; // Put S in FOREST's O position
-      letterGrid[0][3] = tempW; // Put W in SEA's S position
-    }
-
-    // ANOTHER SWAP: Shuffle the 5th letter of RENEWABLE, 4th letter of PLASTIC, 3rd letter of FOREST and 2nd letter of SEA
-    // Save the original positions
-    LetterPosition? tempA2 = letterGrid[4][0]; // A from RENEWABLE (fifth letter, first column)
-    LetterPosition? tempS2 = letterGrid[3][1]; // S from PLASTIC (fourth letter, second column)
-    LetterPosition? tempR = letterGrid[2][2]; // R from FOREST (third letter, third column)
-    LetterPosition? tempE2 = letterGrid[1][3]; // E from SEA (second letter, fourth column)
-
-    // Swap them in a circular fashion: A -> S -> R -> E -> A
-    if (tempA2 != null && tempS2 != null && tempR != null && tempE2 != null) {
-      letterGrid[4][0] = tempS2; // Put S in RENEWABLE's A position
-      letterGrid[3][1] = tempR; // Put R in PLASTIC's S position
-      letterGrid[2][2] = tempE2; // Put E in FOREST's R position
-      letterGrid[1][3] = tempA2; // Put A in SEA's E position
-    }
-
-    // FIFTH SWAP: Shuffle the 6th letter of RENEWABLE, 5th letter of PLASTIC, 4th letter of FOREST and 3rd letter of SEA
-    // Save the original positions
-    LetterPosition? tempB = letterGrid[5][0]; // B from RENEWABLE (sixth letter, first column)
-    LetterPosition? tempT = letterGrid[4][1]; // T from PLASTIC (fifth letter, second column)
-    LetterPosition? tempE3 = letterGrid[3][2]; // E from FOREST (fourth letter, third column)
-    LetterPosition? tempA3 = letterGrid[2][3]; // A from SEA (third letter, fourth column)
-
-    // Swap them in a circular fashion: B -> T -> E -> A -> B
-    if (tempB != null && tempT != null && tempE3 != null && tempA3 != null) {
-      letterGrid[5][0] = tempT; // Put T in RENEWABLE's B position
-      letterGrid[4][1] = tempE3; // Put E in PLASTIC's T position
-      letterGrid[3][2] = tempA3; // Put A in FOREST's E position
-      letterGrid[2][3] = tempB; // Put B in SEA's A position
-    }
-
-    // SIXTH SWAP: Shuffle the 7th letter of RENEWABLE, 6th letter of PLASTIC and 5th letter of FOREST
-    // Save the original positions
-    LetterPosition? tempL2 = letterGrid[6][0]; // L from RENEWABLE (seventh letter, first column)
-    LetterPosition? tempI = letterGrid[5][1]; // I from PLASTIC (sixth letter, second column)
-    LetterPosition? tempS3 = letterGrid[4][2]; // S from FOREST (fifth letter, third column)
-
-    // Swap them in a circular fashion: L -> I -> S -> L
-    if (tempL2 != null && tempI != null && tempS3 != null) {
-      letterGrid[6][0] = tempI; // Put I in RENEWABLE's L position
-      letterGrid[5][1] = tempS3; // Put S in PLASTIC's I position
-      letterGrid[4][2] = tempL2; // Put L in FOREST's S position
-    }
-
-    // SEVENTH SWAP: Shuffle the 8th letter of RENEWABLE, 7th letter of PLASTIC and 6th letter of FOREST
-    // Save the original positions
-    LetterPosition? tempE4 = letterGrid[7][0]; // E from RENEWABLE (eighth letter, first column)
-    LetterPosition? tempC = letterGrid[6][1]; // C from PLASTIC (seventh letter, second column)
-    LetterPosition? tempT2 = letterGrid[5][2]; // T from FOREST (sixth letter, third column)
-
-    // Swap them in a circular fashion: E -> C -> T -> E
-    if (tempE4 != null && tempC != null && tempT2 != null) {
-      letterGrid[7][0] = tempC; // Put C in RENEWABLE's E position
-      letterGrid[6][1] = tempT2; // Put T in PLASTIC's C position
-      letterGrid[5][2] = tempE4; // Put E in FOREST's T position
-    }
-
-    // Update the letter values with the new arrangement
-    updateLetterValuesFromGrid();
+    // Initialize the game
+    initializeGame();
   }
 
   // Update letter values to match the current grid arrangement
@@ -216,8 +105,20 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
     }
   }
 
+  // Check if a letter is in the correct position
+  bool isLetterInCorrectPosition(int row, int col) {
+    LetterPosition? position = letterGrid[row][col];
+    if (position == null) return false;
+
+    // A letter is in correct position if it belongs to this column and is in the right row
+    return position.wordIndex == col && position.letterIndex == row;
+  }
+
   // Function to handle letter selection for swapping
   void selectLetter(int row, int col) {
+    // Always hide keyboard when selecting a letter
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+
     // Skip if this cell doesn't contain a letter
     if (letterGrid[row][col] == null) return;
 
@@ -230,6 +131,9 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
 
       // Skip fixed letters
       if (isFixed) return;
+
+      // NEW: Skip letters that are already in the correct position
+      if (isLetterInCorrectPosition(row, col)) return;
     }
 
     setState(() {
@@ -240,6 +144,24 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
         firstSelectedCol = col;
         selectedCells[row][col] = true;
       } else {
+        // Check if second selected letter is in correct position
+        if (isLetterInCorrectPosition(row, col)) {
+          // Show a message that this letter can't be swapped
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Letters in the correct position cannot be swapped."),
+                duration: Duration(seconds: 2),
+              )
+          );
+
+          // Reset the first selection
+          selectedCells[firstSelectedRow!][firstSelectedCol!] = false;
+          firstSelectedPosition = null;
+          firstSelectedRow = null;
+          firstSelectedCol = null;
+          return;
+        }
+
         // Second selection - perform the swap
         final secondSelectedPosition = letterGrid[row][col];
 
@@ -316,14 +238,227 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
   }
 
   void resetGame() {
-    // Reset to original arrangement with shuffles
-    initState();
-    setState(() {});
+    // Hide keyboard
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+
+    setState(() {
+      // Clear current selections
+      firstSelectedPosition = null;
+      firstSelectedRow = null;
+      firstSelectedCol = null;
+
+      // Reset selection tracking
+      selectedCells = List.generate(
+          maxRows,
+              (_) => List.generate(4, (_) => false)
+      );
+
+      // Reinitialize letter grid and values
+      initializeGame();
+    });
+  }
+
+  // Move initialization logic to a separate method that can be called for reset
+  void initializeGame() {
+    // Initialize letter values storage
+    letterValues = List.generate(
+        4, // Number of columns (words)
+            (i) => List.generate(maxRows, (_) => "")
+    );
+
+    // Initialize letter grid with nulls
+    letterGrid = List.generate(
+        maxRows,
+            (_) => List.generate(4, (_) => null)
+    );
+
+    // Set up the grid layout - initially just arrange letters vertically by word
+    for (int wordIndex = 0; wordIndex < numberData.length; wordIndex++) {
+      String word = numberData[wordIndex]["answer"];
+      for (int letterIndex = 0; letterIndex < word.length; letterIndex++) {
+        // Only assign valid letter positions
+        if (letterIndex < maxRows) {
+          letterGrid[letterIndex][wordIndex] = LetterPosition(wordIndex, letterIndex);
+          letterValues[wordIndex][letterIndex] = word[letterIndex];
+        }
+      }
+    }
+
+    // Save any letters that are already in correct positions before shuffling
+    // so they can remain in the correct positions after shuffling
+    List<LetterPosition> correctPositions = [];
+
+    // Define letters that should remain in the correct position
+    // For this example, let's keep SEA's A (3rd letter) in the correct position
+    // Also keep letter combinations you want to remain in correct positions
+    // The format is: [row, column]
+    List<List<int>> keepInPlace = [
+      [2, 3], // SEA's A (3rd letter in 4th column)
+      [0, 0], // R of RENEWABLE (already fixed)
+      [8, 0], // E of RENEWABLE (already fixed)
+    ];
+
+    // Remember these positions to keep them in place
+    for (var position in keepInPlace) {
+      int row = position[0];
+      int col = position[1];
+      if (row < maxRows && col < 4 && letterGrid[row][col] != null) {
+        correctPositions.add(letterGrid[row][col]!);
+      }
+    }
+
+    // Shuffle the E of RENEWABLE (2nd letter) with P of PLASTIC (1st letter)
+    // Save the original positions
+    LetterPosition? tempE = letterGrid[1][0]; // E from RENEWABLE (second letter, first column)
+    LetterPosition? tempP = letterGrid[0][1]; // P from PLASTIC (first letter, second column)
+
+    // Swap them if they are not in the keep-in-place list
+    if (tempE != null && tempP != null &&
+        !correctPositions.contains(tempE) && !correctPositions.contains(tempP)) {
+      letterGrid[1][0] = tempP; // Put P in RENEWABLE's E position
+      letterGrid[0][1] = tempE; // Put E in PLASTIC's P position
+    }
+
+    // NEW SWAP: Shuffle the N of RENEWABLE (3rd letter) with L of PLASTIC (2nd letter) and F of FOREST (1st letter)
+    // Save the original positions
+    LetterPosition? tempN = letterGrid[2][0]; // N from RENEWABLE (third letter, first column)
+    LetterPosition? tempL = letterGrid[1][1]; // L from PLASTIC (second letter, second column)
+    LetterPosition? tempF = letterGrid[0][2]; // F from FOREST (first letter, third column)
+
+    // Check if any of these positions should be protected
+    bool protectN = correctPositions.contains(tempN);
+    bool protectL = correctPositions.contains(tempL);
+    bool protectF = correctPositions.contains(tempF);
+
+    // Swap them in a circular fashion but only if not protected
+    if (tempN != null && tempL != null && tempF != null) {
+      if (!protectL) letterGrid[2][0] = protectL ? tempN : tempL; // Put L in RENEWABLE's N position
+      if (!protectF) letterGrid[1][1] = protectF ? tempL : tempF; // Put F in PLASTIC's L position
+      if (!protectN) letterGrid[0][2] = protectN ? tempF : tempN; // Put N in FOREST's F position
+    }
+
+    // ADDITIONAL SWAP: Shuffle the 4th letter of RENEWABLE, 3rd letter of PLASTIC, 2nd letter of FOREST, and 1st letter of SEA
+    // Save the original positions
+    LetterPosition? tempW = letterGrid[3][0]; // W from RENEWABLE (fourth letter, first column)
+    LetterPosition? tempA = letterGrid[2][1]; // A from PLASTIC (third letter, second column)
+    LetterPosition? tempO = letterGrid[1][2]; // O from FOREST (second letter, third column)
+    LetterPosition? tempS = letterGrid[0][3]; // S from SEA (first letter, fourth column)
+
+    // Check if any of these positions should be protected
+    bool protectW = correctPositions.contains(tempW);
+    bool protectA = correctPositions.contains(tempA);
+    bool protectO = correctPositions.contains(tempO);
+    bool protectS = correctPositions.contains(tempS);
+
+    // Swap them in a circular fashion but only if not protected
+    if (tempW != null && tempA != null && tempO != null && tempS != null) {
+      if (!protectA) letterGrid[3][0] = protectA ? tempW : tempA; // Put A in RENEWABLE's W position
+      if (!protectO) letterGrid[2][1] = protectO ? tempA : tempO; // Put O in PLASTIC's A position
+      if (!protectS) letterGrid[1][2] = protectS ? tempO : tempS; // Put S in FOREST's O position
+      if (!protectW) letterGrid[0][3] = protectW ? tempS : tempW; // Put W in SEA's S position
+    }
+
+    // ANOTHER SWAP: Shuffle the 5th letter of RENEWABLE, 4th letter of PLASTIC, 3rd letter of FOREST and 2nd letter of SEA
+    // Save the original positions
+    LetterPosition? tempA2 = letterGrid[4][0]; // A from RENEWABLE (fifth letter, first column)
+    LetterPosition? tempS2 = letterGrid[3][1]; // S from PLASTIC (fourth letter, second column)
+    LetterPosition? tempR = letterGrid[2][2]; // R from FOREST (third letter, third column)
+    LetterPosition? tempE2 = letterGrid[1][3]; // E from SEA (second letter, fourth column)
+
+    // Check if any of these positions should be protected
+    bool protectA2 = correctPositions.contains(tempA2);
+    bool protectS2 = correctPositions.contains(tempS2);
+    bool protectR = correctPositions.contains(tempR);
+    bool protectE2 = correctPositions.contains(tempE2);
+
+    // Swap them in a circular fashion but only if not protected
+    if (tempA2 != null && tempS2 != null && tempR != null && tempE2 != null) {
+      if (!protectS2) letterGrid[4][0] = protectS2 ? tempA2 : tempS2; // Put S in RENEWABLE's A position
+      if (!protectR) letterGrid[3][1] = protectR ? tempS2 : tempR; // Put R in PLASTIC's S position
+      if (!protectE2) letterGrid[2][2] = protectE2 ? tempR : tempE2; // Put E in FOREST's R position
+      if (!protectA2) letterGrid[1][3] = protectA2 ? tempE2 : tempA2; // Put A in SEA's E position
+    }
+
+    // FIFTH SWAP: Shuffle the 6th letter of RENEWABLE, 5th letter of PLASTIC, 4th letter of FOREST
+    // Note: SEA only has 3 letters, so we're not involving it in this swap
+    // Save the original positions
+    LetterPosition? tempB = letterGrid[5][0]; // B from RENEWABLE (sixth letter, first column)
+    LetterPosition? tempT = letterGrid[4][1]; // T from PLASTIC (fifth letter, second column)
+    LetterPosition? tempE3 = letterGrid[3][2]; // E from FOREST (fourth letter, third column)
+    // No fourth position because SEA only has 3 letters
+
+    // Check if any of these positions should be protected
+    bool protectB = correctPositions.contains(tempB);
+    bool protectT = correctPositions.contains(tempT);
+    bool protectE3 = correctPositions.contains(tempE3);
+
+    // Swap them in a circular fashion but only if not protected
+    if (tempB != null && tempT != null && tempE3 != null) {
+      if (!protectT) letterGrid[5][0] = protectT ? tempB : tempT; // Put T in RENEWABLE's B position
+      if (!protectE3) letterGrid[4][1] = protectE3 ? tempT : tempE3; // Put E in PLASTIC's T position
+      if (!protectB) letterGrid[3][2] = protectB ? tempE3 : tempB; // Put B in FOREST's E position
+    }
+
+    // SIXTH SWAP: Shuffle the 7th letter of RENEWABLE, 6th letter of PLASTIC and 5th letter of FOREST
+    // Save the original positions
+    LetterPosition? tempL2 = letterGrid[6][0]; // L from RENEWABLE (seventh letter, first column)
+    LetterPosition? tempI = letterGrid[5][1]; // I from PLASTIC (sixth letter, second column)
+    LetterPosition? tempS3 = letterGrid[4][2]; // S from FOREST (fifth letter, third column)
+
+    // Check if any of these positions should be protected
+    bool protectL2 = correctPositions.contains(tempL2);
+    bool protectI = correctPositions.contains(tempI);
+    bool protectS3 = correctPositions.contains(tempS3);
+
+    // Swap them in a circular fashion but only if not protected
+    if (tempL2 != null && tempI != null && tempS3 != null) {
+      if (!protectI) letterGrid[6][0] = protectI ? tempL2 : tempI; // Put I in RENEWABLE's L position
+      if (!protectS3) letterGrid[5][1] = protectS3 ? tempI : tempS3; // Put S in PLASTIC's I position
+      if (!protectL2) letterGrid[4][2] = protectL2 ? tempS3 : tempL2; // Put L in FOREST's S position
+    }
+
+    // SEVENTH SWAP: Shuffle the 8th letter of RENEWABLE, 7th letter of PLASTIC and 6th letter of FOREST
+    // Save the original positions
+    LetterPosition? tempE4 = letterGrid[7][0]; // E from RENEWABLE (eighth letter, first column)
+    LetterPosition? tempC = letterGrid[6][1]; // C from PLASTIC (seventh letter, second column)
+    LetterPosition? tempT2 = letterGrid[5][2]; // T from FOREST (sixth letter, third column)
+
+    // Check if any of these positions should be protected
+    bool protectE4 = correctPositions.contains(tempE4);
+    bool protectC = correctPositions.contains(tempC);
+    bool protectT2 = correctPositions.contains(tempT2);
+
+    // Swap them in a circular fashion but only if not protected
+    if (tempE4 != null && tempC != null && tempT2 != null) {
+      if (!protectC) letterGrid[7][0] = protectC ? tempE4 : tempC; // Put C in RENEWABLE's E position
+      if (!protectT2) letterGrid[6][1] = protectT2 ? tempC : tempT2; // Put T in PLASTIC's C position
+      if (!protectE4) letterGrid[5][2] = protectE4 ? tempT2 : tempE4; // Put E in FOREST's T position
+    }
+
+    // Update the letter values with the new arrangement
+    updateLetterValuesFromGrid();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    // Hide keyboard when metrics change (like when keyboard might appear)
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
   }
 
   @override
   Widget build(BuildContext context) {
+    // Force hide keyboard on each build
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+
     return Scaffold(
+      // Disable resizeToAvoidBottomInset to prevent keyboard from pushing up content
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(
           "Number Game",
@@ -336,11 +471,14 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
         backgroundColor: Colors.white60,
       ),
       body: SingleChildScrollView(
+        // Disable keyboard focus when tapping in the scrollable area
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,37 +516,43 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
                                 (position.letterIndex == 0 ||
                                     position.letterIndex == numberData[0]["answer"].length - 1));
 
+                            // Check if the letter is in the correct position
+                            bool isCorrectPosition = isLetterInCorrectPosition(rowIndex, colIndex);
+
                             return Padding(
                               padding: EdgeInsets.symmetric(vertical: 4.0),
-                              child: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: selectedCells[rowIndex][colIndex]
-                                        ? Colors.blue
-                                        : (colIndex < numberData.length &&
-                                        rowIndex < numberData[colIndex]["answer"].length &&
-                                        letterValues[colIndex][rowIndex] == numberData[colIndex]["answer"][rowIndex])
-                                        ? Colors.green
-                                        : Colors.black,
-                                    width: selectedCells[rowIndex][colIndex] ? 3 : 2,
-                                  ),
-                                  color: isFixed ? Colors.blue[900] : null,
-                                ),
+                              child: Material(
+                                color: Colors.transparent,
+                                shape: CircleBorder(),
+                                clipBehavior: Clip.hardEdge,
                                 child: InkWell(
                                   onTap: () {
-                                    // Trigger letter selection when tapped
+                                    // Hide keyboard and trigger letter selection
+                                    FocusScope.of(context).unfocus();
+                                    SystemChannels.textInput.invokeMethod('TextInput.hide');
                                     selectLetter(rowIndex, colIndex);
                                   },
-                                  child: Center(
-                                    child: Text(
-                                      letterValues[colIndex][rowIndex],
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: isFixed ? Colors.white : Colors.black,
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: selectedCells[rowIndex][colIndex]
+                                            ? Colors.blue
+                                            : Colors.black,
+                                        width: selectedCells[rowIndex][colIndex] ? 3 : 2,
+                                      ),
+                                      color: isFixed || isCorrectPosition ? Colors.blue[900] : null,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        letterValues[colIndex][rowIndex],
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: isFixed || isCorrectPosition ? Colors.white : Colors.black,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -428,7 +572,10 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ElevatedButton(
-                  onPressed: submitAnswers,
+                  onPressed: () {
+                    SystemChannels.textInput.invokeMethod('TextInput.hide');
+                    submitAnswers();
+                  },
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     backgroundColor: Colors.blue[900],
@@ -447,7 +594,10 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
                 ),
                 SizedBox(width: 20),
                 ElevatedButton(
-                  onPressed: resetGame,
+                  onPressed: () {
+                    SystemChannels.textInput.invokeMethod('TextInput.hide');
+                    resetGame();
+                  },
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     backgroundColor: Colors.red,
@@ -473,6 +623,15 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> {
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.blue[900],
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Letters in correct position (dark blue) can't be swapped.",
+              style: TextStyle(
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+                color: Colors.blue[700],
               ),
             ),
             firstSelectedPosition != null
