@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'data_service.dart'; // Import the data service
 
 // Define letter position class at the top level
 class LetterPosition {
@@ -35,12 +36,10 @@ class NumberMatchingGame extends StatefulWidget {
 }
 
 class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBindingObserver {
-  final List<Map<String, dynamic>> numberData = [
-    {"number": "29.8%", "answer": "RENEWABLE"},
-    {"number": "11 M \n tons", "answer": "PLASTIC"},
-    {"number": "4.7 M  \n Hectares", "answer": "FOREST"},
-    {"number": "3.8  \n millimeter", "answer": "SEA"}
-  ];
+  // Use the data service
+  final DataService _dataService = DataService();
+  List<GameData> numberData = [];
+  bool isLoading = true;
 
   // Track active letter positions in a grid format
   List<List<LetterPosition?>> letterGrid = [];
@@ -49,7 +48,7 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
   List<List<String>> letterValues = [];
 
   // Define maximum rows needed (based on longest word)
-  int maxRows = 9; // RENEWABLE has 9 letters
+  int maxRows = 9; // RENEWABLE has 9 letters by default
 
   final List<EdgeInsets> numberPaddings = [
     EdgeInsets.only(left: 24.0, top: 28.0),
@@ -66,6 +65,10 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
   // Visual feedback variables for selection
   List<List<bool>> selectedCells = [];
 
+  // Track completed words and their descriptions
+  Set<int> completedWords = Set<int>();
+  List<String> shownDescriptions = [];
+
   @override
   void initState() {
     super.initState();
@@ -74,14 +77,42 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
     // Force hide keyboard when app initializes
     SystemChannels.textInput.invokeMethod('TextInput.hide');
 
-    // Initialize selected cells tracking
-    selectedCells = List.generate(
-        maxRows,
-            (_) => List.generate(4, (_) => false)
-    );
+    // Load data from JSON file
+    _loadData();
+  }
 
-    // Initialize the game
-    initializeGame();
+  // Load data from the DataService
+  Future<void> _loadData() async {
+    try {
+      final data = await _dataService.loadGameData();
+      setState(() {
+        numberData = data;
+        isLoading = false;
+
+        // Find the maximum rows needed (based on longest word)
+        maxRows = 0;
+        for (var item in numberData) {
+          if (item.answer.length > maxRows) {
+            maxRows = item.answer.length;
+          }
+        }
+
+        // Initialize selected cells tracking
+        selectedCells = List.generate(
+            maxRows,
+                (_) => List.generate(numberData.length, (_) => false)
+        );
+
+        // Initialize the game with the loaded data
+        initializeGame();
+      });
+    } catch (e) {
+      print('Error loading data: $e');
+      // Show error to user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load game data. Please try again.')),
+      );
+    }
   }
 
   // Update letter values to match the current grid arrangement
@@ -95,10 +126,10 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
 
     // Then fill based on the current grid
     for (int row = 0; row < maxRows; row++) {
-      for (int col = 0; col < 4; col++) {
+      for (int col = 0; col < numberData.length; col++) {
         LetterPosition? pos = letterGrid[row][col];
         if (pos != null) {
-          String letter = numberData[pos.wordIndex]["answer"][pos.letterIndex];
+          String letter = numberData[pos.wordIndex].answer[pos.letterIndex];
           letterValues[col][row] = letter;
         }
       }
@@ -114,6 +145,352 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
     return position.wordIndex == col && position.letterIndex == row;
   }
 
+  // Check if a specific word is completed correctly
+  bool isWordCompleted(int wordIndex) {
+    String word = numberData[wordIndex].answer;
+    for (int letterIndex = 0; letterIndex < word.length; letterIndex++) {
+      if (!isLetterInCorrectPosition(letterIndex, wordIndex)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Check for newly completed words and show descriptions
+  void checkForNewCompletions() {
+    Set<int> newlyCompleted = Set<int>();
+
+    for (int wordIndex = 0; wordIndex < numberData.length; wordIndex++) {
+      if (isWordCompleted(wordIndex) && !completedWords.contains(wordIndex)) {
+        newlyCompleted.add(wordIndex);
+        completedWords.add(wordIndex);
+      }
+    }
+
+    // Show descriptions for newly completed words
+    for (int wordIndex in newlyCompleted) {
+      showDescriptionDialog(wordIndex);
+    }
+  }
+
+  // Show description dialog for a completed word
+  // Replace your showDescriptionDialog method with this enhanced version
+
+  void showDescriptionDialog(int wordIndex) {
+    String number = numberData[wordIndex].number;
+    String answer = numberData[wordIndex].answer;
+    String description = numberData[wordIndex].description;
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black45,
+      transitionDuration: const Duration(milliseconds: 400),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return SlideTransition(
+          position: Tween(
+            begin: const Offset(0, -1),
+            end: const Offset(0, 0),
+          ).animate(CurvedAnimation(
+            parent: anim1,
+            curve: Curves.bounceOut,
+          )),
+          child: FadeTransition(
+            opacity: anim1,
+            child: child,
+          ),
+        );
+      },
+      pageBuilder: (context, anim1, anim2) {
+        return Center(
+          child: Container(
+            margin: EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.blue[50]!,
+                  Colors.purple[50]!,
+                  Colors.pink[50]!,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Animated celebration icon
+                    TweenAnimationBuilder<double>(
+                      duration: Duration(milliseconds: 800),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: Transform.rotate(
+                            angle: value * 0.5,
+                            child: Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: RadialGradient(
+                                  colors: [
+                                    Colors.yellow[300]!,
+                                    Colors.orange[400]!,
+                                  ],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.orange.withOpacity(0.4),
+                                    blurRadius: 15,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.celebration,
+                                size: 40,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // Animated title
+                    TweenAnimationBuilder<double>(
+                      duration: Duration(milliseconds: 600),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, 20 * (1 - value)),
+                            child: ShaderMask(
+                              shaderCallback: (bounds) => LinearGradient(
+                                colors: [
+                                  Colors.purple[600]!,
+                                  Colors.blue[600]!,
+                                  Colors.teal[600]!,
+                                ],
+                              ).createShader(bounds),
+                              child: Text(
+                                "🎉 Amazing! 🎉",
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    SizedBox(height: 20),
+
+                    // Word completion info with animated background
+                    TweenAnimationBuilder<double>(
+                      duration: Duration(milliseconds: 800),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: 0.8 + (0.2 * value),
+                          child: Container(
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.blue[600]!.withOpacity(0.8),
+                                  Colors.purple[600]!.withOpacity(0.8),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(15),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.3),
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.check_circle,
+                                        color: Colors.white, size: 24),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "You completed:",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 8),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    "$number = $answer",
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue[800],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    SizedBox(height: 20),
+
+                    // Description section with fade-in animation
+                    TweenAnimationBuilder<double>(
+                      duration: Duration(milliseconds: 1000),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Container(
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.blue[200]!,
+                                width: 1,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.info_outline,
+                                        color: Colors.blue[700], size: 20),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "Did you know?",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  description,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    height: 1.4,
+                                    color: Colors.grey[800],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    SizedBox(height: 24),
+
+                    // Animated button
+                    TweenAnimationBuilder<double>(
+                      duration: Duration(milliseconds: 1200),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(25),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.green[400]!,
+                                  Colors.teal[400]!,
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withOpacity(0.3),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(25),
+                                onTap: () => Navigator.pop(context),
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 32, vertical: 12),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.thumb_up,
+                                          color: Colors.white, size: 20),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        "Awesome!",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // Function to handle letter selection for swapping
   void selectLetter(int row, int col) {
     // Always hide keyboard when selecting a letter
@@ -122,17 +499,26 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
     // Skip if this cell doesn't contain a letter
     if (letterGrid[row][col] == null) return;
 
-    // Determine if this is a fixed position (first or last letter of RENEWABLE)
+    // Determine if this is a fixed position (first or last letter of first word)
     LetterPosition? position = letterGrid[row][col];
     if (position != null) {
       bool isFixed = (position.wordIndex == 0 &&
           (position.letterIndex == 0 ||
-              position.letterIndex == numberData[0]["answer"].length - 1));
+              position.letterIndex == numberData[0].answer.length - 1));
+
+      // If we have at least 4 words, also fix last letter of last word like in original code
+      if (numberData.length >= 4) {
+        int lastWordIndex = numberData.length - 1;
+        int lastLetterIndex = numberData[lastWordIndex].answer.length - 1;
+        // Add this condition to isFixed
+        isFixed = isFixed || (position.wordIndex == lastWordIndex &&
+            position.letterIndex == lastLetterIndex);
+      }
 
       // Skip fixed letters
       if (isFixed) return;
 
-      // NEW: Skip letters that are already in the correct position
+      // Skip letters that are already in the correct position
       if (isLetterInCorrectPosition(row, col)) return;
     }
 
@@ -177,6 +563,9 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
         firstSelectedPosition = null;
         firstSelectedRow = null;
         firstSelectedCol = null;
+
+        // Check for newly completed words after the swap
+        checkForNewCompletions();
       }
     });
   }
@@ -186,15 +575,15 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
     // For each grid position, check if the letter at that position
     // belongs to the correct word and is in the correct position
     for (int row = 0; row < maxRows; row++) {
-      for (int col = 0; col < 4; col++) {
+      for (int col = 0; col < numberData.length; col++) {
         LetterPosition? pos = letterGrid[row][col];
 
         // Skip empty cells
         if (pos == null) continue;
 
         // Get the letter that should be at this position
-        String correctLetter = numberData[col]["answer"].length > row
-            ? numberData[col]["answer"][row]
+        String correctLetter = numberData[col].answer.length > row
+            ? numberData[col].answer[row]
             : "";
 
         // If this position should have a letter (not empty)
@@ -250,31 +639,35 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
       // Reset selection tracking
       selectedCells = List.generate(
           maxRows,
-              (_) => List.generate(4, (_) => false)
+              (_) => List.generate(numberData.length, (_) => false)
       );
+
+      // Reset completed words tracking
+      completedWords.clear();
+      shownDescriptions.clear();
 
       // Reinitialize letter grid and values
       initializeGame();
     });
   }
 
-  // Move initialization logic to a separate method that can be called for reset
+  // Initialize the game with custom letter shuffling logic from the original code
   void initializeGame() {
     // Initialize letter values storage
     letterValues = List.generate(
-        4, // Number of columns (words)
+        numberData.length, // Number of columns (words)
             (i) => List.generate(maxRows, (_) => "")
     );
 
     // Initialize letter grid with nulls
     letterGrid = List.generate(
         maxRows,
-            (_) => List.generate(4, (_) => null)
+            (_) => List.generate(numberData.length, (_) => null)
     );
 
     // Set up the grid layout - initially just arrange letters vertically by word
     for (int wordIndex = 0; wordIndex < numberData.length; wordIndex++) {
-      String word = numberData[wordIndex]["answer"];
+      String word = numberData[wordIndex].answer;
       for (int letterIndex = 0; letterIndex < word.length; letterIndex++) {
         // Only assign valid letter positions
         if (letterIndex < maxRows) {
@@ -285,158 +678,165 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
     }
 
     // Save any letters that are already in correct positions before shuffling
-    // so they can remain in the correct positions after shuffling
     List<LetterPosition> correctPositions = [];
 
     // Define letters that should remain in the correct position
-    // For this example, let's keep SEA's A (3rd letter) in the correct position
-    // Also keep letter combinations you want to remain in correct positions
-    // The format is: [row, column]
-    List<List<int>> keepInPlace = [
-      [2, 3], // SEA's A (3rd letter in 4th column)
-      [0, 0], // R of RENEWABLE (already fixed)
-      [8, 0], // E of RENEWABLE (already fixed)
-    ];
+    List<List<int>> keepInPlace = [];
+
+    // Keep first and last letter of first word in place
+    if (numberData.isNotEmpty) {
+      keepInPlace.add([0, 0]); // First letter of first word
+      keepInPlace.add([numberData[0].answer.length - 1, 0]); // Last letter of first word
+    }
+
+    // If we have at least 4 words, also fix last letter of last word like in original code
+    if (numberData.length >= 4) {
+      int lastWordIndex = numberData.length - 1;
+      int lastLetterIndex = numberData[lastWordIndex].answer.length - 1;
+      if (lastLetterIndex >= 0) {
+        keepInPlace.add([lastLetterIndex, lastWordIndex]);
+      }
+    }
+
+    // If we have the original 4 words, add specific fixed positions from original code
+    if (numberData.length == 4 &&
+        numberData[0].answer == "RENEWABLE" &&
+        numberData[3].answer == "SEA") {
+      // Add SEA's A (3rd letter) to fixed positions
+      keepInPlace.add([2, 3]); // SEA's A (3rd letter in 4th column)
+    }
 
     // Remember these positions to keep them in place
     for (var position in keepInPlace) {
       int row = position[0];
       int col = position[1];
-      if (row < maxRows && col < 4 && letterGrid[row][col] != null) {
+      if (row < maxRows && col < numberData.length && letterGrid[row][col] != null) {
         correctPositions.add(letterGrid[row][col]!);
       }
     }
 
-    // Shuffle the E of RENEWABLE (2nd letter) with P of PLASTIC (1st letter)
-    // Save the original positions
-    LetterPosition? tempE = letterGrid[1][0]; // E from RENEWABLE (second letter, first column)
-    LetterPosition? tempP = letterGrid[0][1]; // P from PLASTIC (first letter, second column)
+    // If we have the original data set, use the specific swapping logic
+    if (numberData.length == 4 &&
+        numberData[0].answer == "RENEWABLE" &&
+        numberData[1].answer == "PLASTIC" &&
+        numberData[2].answer == "FOREST" &&
+        numberData[3].answer == "SEA") {
 
-    // Swap them if they are not in the keep-in-place list
-    if (tempE != null && tempP != null &&
-        !correctPositions.contains(tempE) && !correctPositions.contains(tempP)) {
-      letterGrid[1][0] = tempP; // Put P in RENEWABLE's E position
-      letterGrid[0][1] = tempE; // Put E in PLASTIC's P position
+      // SWAP 1: Shuffle the E of RENEWABLE (2nd letter) with P of PLASTIC (1st letter)
+      _swapIfNotFixed(1, 0, 0, 1, correctPositions);
+
+      // SWAP 2: Shuffle the N of RENEWABLE (3rd letter) with L of PLASTIC (2nd letter) and F of FOREST (1st letter)
+      _circularSwapThree([2, 0], [1, 1], [0, 2], correctPositions);
+
+      // SWAP 3: Shuffle the 4th letter of RENEWABLE, 3rd of PLASTIC, 2nd of FOREST, and 1st of SEA
+      _circularSwapFour([3, 0], [2, 1], [1, 2], [0, 3], correctPositions);
+
+      // SWAP 4: Shuffle the 5th letter of RENEWABLE, 4th of PLASTIC, 3rd of FOREST and 2nd of SEA
+      _circularSwapFour([4, 0], [3, 1], [2, 2], [1, 3], correctPositions);
+
+      // SWAP 5: Shuffle the 6th letter of RENEWABLE, 5th of PLASTIC, 4th of FOREST
+      _circularSwapThree([5, 0], [4, 1], [3, 2], correctPositions);
+
+      // SWAP 6: Shuffle the 7th letter of RENEWABLE, 6th of PLASTIC and 5th of FOREST
+      _circularSwapThree([6, 0], [5, 1], [4, 2], correctPositions);
+
+      // SWAP 7: Shuffle the 8th letter of RENEWABLE, 7th of PLASTIC and 6th of FOREST
+      _circularSwapThree([7, 0], [6, 1], [5, 2], correctPositions);
     }
+    else {
+      // For other data sets, perform a more generic shuffle
+      List<LetterPosition?> allLetters = [];
 
-    // NEW SWAP: Shuffle the N of RENEWABLE (3rd letter) with L of PLASTIC (2nd letter) and F of FOREST (1st letter)
-    // Save the original positions
-    LetterPosition? tempN = letterGrid[2][0]; // N from RENEWABLE (third letter, first column)
-    LetterPosition? tempL = letterGrid[1][1]; // L from PLASTIC (second letter, second column)
-    LetterPosition? tempF = letterGrid[0][2]; // F from FOREST (first letter, third column)
+      // Collect all letter positions except those in correctPositions
+      for (int row = 0; row < maxRows; row++) {
+        for (int col = 0; col < numberData.length; col++) {
+          LetterPosition? pos = letterGrid[row][col];
+          if (pos != null && !correctPositions.contains(pos)) {
+            allLetters.add(pos);
+          }
+        }
+      }
 
-    // Check if any of these positions should be protected
-    bool protectN = correctPositions.contains(tempN);
-    bool protectL = correctPositions.contains(tempL);
-    bool protectF = correctPositions.contains(tempF);
+      // Shuffle the collected letters
+      allLetters.shuffle();
 
-    // Swap them in a circular fashion but only if not protected
-    if (tempN != null && tempL != null && tempF != null) {
-      if (!protectL) letterGrid[2][0] = protectL ? tempN : tempL; // Put L in RENEWABLE's N position
-      if (!protectF) letterGrid[1][1] = protectF ? tempL : tempF; // Put F in PLASTIC's L position
-      if (!protectN) letterGrid[0][2] = protectN ? tempF : tempN; // Put N in FOREST's F position
-    }
+      // Place shuffled letters back, skipping positions that should remain fixed
+      int letterIndex = 0;
+      for (int row = 0; row < maxRows; row++) {
+        for (int col = 0; col < numberData.length; col++) {
+          // Skip positions that should be kept in place
+          bool shouldKeep = false;
+          for (var position in keepInPlace) {
+            if (position[0] == row && position[1] == col) {
+              shouldKeep = true;
+              break;
+            }
+          }
 
-    // ADDITIONAL SWAP: Shuffle the 4th letter of RENEWABLE, 3rd letter of PLASTIC, 2nd letter of FOREST, and 1st letter of SEA
-    // Save the original positions
-    LetterPosition? tempW = letterGrid[3][0]; // W from RENEWABLE (fourth letter, first column)
-    LetterPosition? tempA = letterGrid[2][1]; // A from PLASTIC (third letter, second column)
-    LetterPosition? tempO = letterGrid[1][2]; // O from FOREST (second letter, third column)
-    LetterPosition? tempS = letterGrid[0][3]; // S from SEA (first letter, fourth column)
-
-    // Check if any of these positions should be protected
-    bool protectW = correctPositions.contains(tempW);
-    bool protectA = correctPositions.contains(tempA);
-    bool protectO = correctPositions.contains(tempO);
-    bool protectS = correctPositions.contains(tempS);
-
-    // Swap them in a circular fashion but only if not protected
-    if (tempW != null && tempA != null && tempO != null && tempS != null) {
-      if (!protectA) letterGrid[3][0] = protectA ? tempW : tempA; // Put A in RENEWABLE's W position
-      if (!protectO) letterGrid[2][1] = protectO ? tempA : tempO; // Put O in PLASTIC's A position
-      if (!protectS) letterGrid[1][2] = protectS ? tempO : tempS; // Put S in FOREST's O position
-      if (!protectW) letterGrid[0][3] = protectW ? tempS : tempW; // Put W in SEA's S position
-    }
-
-    // ANOTHER SWAP: Shuffle the 5th letter of RENEWABLE, 4th letter of PLASTIC, 3rd letter of FOREST and 2nd letter of SEA
-    // Save the original positions
-    LetterPosition? tempA2 = letterGrid[4][0]; // A from RENEWABLE (fifth letter, first column)
-    LetterPosition? tempS2 = letterGrid[3][1]; // S from PLASTIC (fourth letter, second column)
-    LetterPosition? tempR = letterGrid[2][2]; // R from FOREST (third letter, third column)
-    LetterPosition? tempE2 = letterGrid[1][3]; // E from SEA (second letter, fourth column)
-
-    // Check if any of these positions should be protected
-    bool protectA2 = correctPositions.contains(tempA2);
-    bool protectS2 = correctPositions.contains(tempS2);
-    bool protectR = correctPositions.contains(tempR);
-    bool protectE2 = correctPositions.contains(tempE2);
-
-    // Swap them in a circular fashion but only if not protected
-    if (tempA2 != null && tempS2 != null && tempR != null && tempE2 != null) {
-      if (!protectS2) letterGrid[4][0] = protectS2 ? tempA2 : tempS2; // Put S in RENEWABLE's A position
-      if (!protectR) letterGrid[3][1] = protectR ? tempS2 : tempR; // Put R in PLASTIC's S position
-      if (!protectE2) letterGrid[2][2] = protectE2 ? tempR : tempE2; // Put E in FOREST's R position
-      if (!protectA2) letterGrid[1][3] = protectA2 ? tempE2 : tempA2; // Put A in SEA's E position
-    }
-
-    // FIFTH SWAP: Shuffle the 6th letter of RENEWABLE, 5th letter of PLASTIC, 4th letter of FOREST
-    // Note: SEA only has 3 letters, so we're not involving it in this swap
-    // Save the original positions
-    LetterPosition? tempB = letterGrid[5][0]; // B from RENEWABLE (sixth letter, first column)
-    LetterPosition? tempT = letterGrid[4][1]; // T from PLASTIC (fifth letter, second column)
-    LetterPosition? tempE3 = letterGrid[3][2]; // E from FOREST (fourth letter, third column)
-    // No fourth position because SEA only has 3 letters
-
-    // Check if any of these positions should be protected
-    bool protectB = correctPositions.contains(tempB);
-    bool protectT = correctPositions.contains(tempT);
-    bool protectE3 = correctPositions.contains(tempE3);
-
-    // Swap them in a circular fashion but only if not protected
-    if (tempB != null && tempT != null && tempE3 != null) {
-      if (!protectT) letterGrid[5][0] = protectT ? tempB : tempT; // Put T in RENEWABLE's B position
-      if (!protectE3) letterGrid[4][1] = protectE3 ? tempT : tempE3; // Put E in PLASTIC's T position
-      if (!protectB) letterGrid[3][2] = protectB ? tempE3 : tempB; // Put B in FOREST's E position
-    }
-
-    // SIXTH SWAP: Shuffle the 7th letter of RENEWABLE, 6th letter of PLASTIC and 5th letter of FOREST
-    // Save the original positions
-    LetterPosition? tempL2 = letterGrid[6][0]; // L from RENEWABLE (seventh letter, first column)
-    LetterPosition? tempI = letterGrid[5][1]; // I from PLASTIC (sixth letter, second column)
-    LetterPosition? tempS3 = letterGrid[4][2]; // S from FOREST (fifth letter, third column)
-
-    // Check if any of these positions should be protected
-    bool protectL2 = correctPositions.contains(tempL2);
-    bool protectI = correctPositions.contains(tempI);
-    bool protectS3 = correctPositions.contains(tempS3);
-
-    // Swap them in a circular fashion but only if not protected
-    if (tempL2 != null && tempI != null && tempS3 != null) {
-      if (!protectI) letterGrid[6][0] = protectI ? tempL2 : tempI; // Put I in RENEWABLE's L position
-      if (!protectS3) letterGrid[5][1] = protectS3 ? tempI : tempS3; // Put S in PLASTIC's I position
-      if (!protectL2) letterGrid[4][2] = protectL2 ? tempS3 : tempL2; // Put L in FOREST's S position
-    }
-
-    // SEVENTH SWAP: Shuffle the 8th letter of RENEWABLE, 7th letter of PLASTIC and 6th letter of FOREST
-    // Save the original positions
-    LetterPosition? tempE4 = letterGrid[7][0]; // E from RENEWABLE (eighth letter, first column)
-    LetterPosition? tempC = letterGrid[6][1]; // C from PLASTIC (seventh letter, second column)
-    LetterPosition? tempT2 = letterGrid[5][2]; // T from FOREST (sixth letter, third column)
-
-    // Check if any of these positions should be protected
-    bool protectE4 = correctPositions.contains(tempE4);
-    bool protectC = correctPositions.contains(tempC);
-    bool protectT2 = correctPositions.contains(tempT2);
-
-    // Swap them in a circular fashion but only if not protected
-    if (tempE4 != null && tempC != null && tempT2 != null) {
-      if (!protectC) letterGrid[7][0] = protectC ? tempE4 : tempC; // Put C in RENEWABLE's E position
-      if (!protectT2) letterGrid[6][1] = protectT2 ? tempC : tempT2; // Put T in PLASTIC's C position
-      if (!protectE4) letterGrid[5][2] = protectE4 ? tempT2 : tempE4; // Put E in FOREST's T position
+          if (!shouldKeep && letterIndex < allLetters.length && letterGrid[row][col] != null) {
+            letterGrid[row][col] = allLetters[letterIndex];
+            letterIndex++;
+          }
+        }
+      }
     }
 
     // Update the letter values with the new arrangement
     updateLetterValuesFromGrid();
+  }
+
+  // Helper to swap two specific positions if they're not fixed
+  void _swapIfNotFixed(int row1, int col1, int row2, int col2, List<LetterPosition> fixedPositions) {
+    LetterPosition? temp1 = letterGrid[row1][col1];
+    LetterPosition? temp2 = letterGrid[row2][col2];
+
+    // Only swap if both positions are not null and not in fixed positions
+    if (temp1 != null && temp2 != null &&
+        !fixedPositions.contains(temp1) && !fixedPositions.contains(temp2)) {
+      letterGrid[row1][col1] = temp2;
+      letterGrid[row2][col2] = temp1;
+    }
+  }
+
+  // Helper for circular swapping of three positions
+  void _circularSwapThree(List<int> pos1, List<int> pos2, List<int> pos3, List<LetterPosition> fixedPositions) {
+    LetterPosition? temp1 = letterGrid[pos1[0]][pos1[1]];
+    LetterPosition? temp2 = letterGrid[pos2[0]][pos2[1]];
+    LetterPosition? temp3 = letterGrid[pos3[0]][pos3[1]];
+
+    // Check if positions should be protected
+    bool protect1 = fixedPositions.contains(temp1);
+    bool protect2 = fixedPositions.contains(temp2);
+    bool protect3 = fixedPositions.contains(temp3);
+
+    // Swap them in a circular fashion but only if not protected
+    if (temp1 != null && temp2 != null && temp3 != null) {
+      if (!protect2) letterGrid[pos1[0]][pos1[1]] = protect2 ? temp1 : temp2;
+      if (!protect3) letterGrid[pos2[0]][pos2[1]] = protect3 ? temp2 : temp3;
+      if (!protect1) letterGrid[pos3[0]][pos3[1]] = protect1 ? temp3 : temp1;
+    }
+  }
+
+  // Helper for circular swapping of four positions
+  void _circularSwapFour(List<int> pos1, List<int> pos2, List<int> pos3, List<int> pos4, List<LetterPosition> fixedPositions) {
+    LetterPosition? temp1 = letterGrid[pos1[0]][pos1[1]];
+    LetterPosition? temp2 = letterGrid[pos2[0]][pos2[1]];
+    LetterPosition? temp3 = letterGrid[pos3[0]][pos3[1]];
+    LetterPosition? temp4 = letterGrid[pos4[0]][pos4[1]];
+
+    // Check if positions should be protected
+    bool protect1 = fixedPositions.contains(temp1);
+    bool protect2 = fixedPositions.contains(temp2);
+    bool protect3 = fixedPositions.contains(temp3);
+    bool protect4 = fixedPositions.contains(temp4);
+
+    // Swap them in a circular fashion but only if not protected
+    if (temp1 != null && temp2 != null && temp3 != null && temp4 != null) {
+      if (!protect2) letterGrid[pos1[0]][pos1[1]] = protect2 ? temp1 : temp2;
+      if (!protect3) letterGrid[pos2[0]][pos2[1]] = protect3 ? temp2 : temp3;
+      if (!protect4) letterGrid[pos3[0]][pos3[1]] = protect4 ? temp3 : temp4;
+      if (!protect1) letterGrid[pos4[0]][pos4[1]] = protect1 ? temp4 : temp1;
+    }
   }
 
   @override
@@ -455,6 +855,26 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
   Widget build(BuildContext context) {
     // Force hide keyboard on each build
     SystemChannels.textInput.invokeMethod('TextInput.hide');
+
+    if (isLoading) {
+      return Scaffold(
+        backgroundColor: Color(0xFFF5F5F7),
+        appBar: AppBar(
+          title: Text(
+            "Number Game",
+            style: TextStyle(
+              color: Colors.blue[900],
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          centerTitle: true,
+          backgroundColor: Colors.white60,
+        ),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Color(0xFFF5F5F7),
@@ -492,7 +912,7 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          numberData[colIndex]["number"],
+                          numberData[colIndex].number,
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -512,10 +932,18 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
                               return SizedBox.shrink();
                             }
 
-                            // Determine if this is a fixed position (first or last letter of RENEWABLE)
+                            // Determine if this is a fixed position (first or last letter of first word)
                             bool isFixed = (position.wordIndex == 0 &&
                                 (position.letterIndex == 0 ||
-                                    position.letterIndex == numberData[0]["answer"].length - 1));
+                                    position.letterIndex == numberData[0].answer.length - 1));
+
+                            // If we have at least 4 words, also fix last letter of last word like in original code
+                            if (numberData.length >= 4) {
+                              int lastWordIndex = numberData.length - 1;
+                              int lastLetterIndex = numberData[lastWordIndex].answer.length - 1;
+                              isFixed = isFixed || (position.wordIndex == lastWordIndex &&
+                                  position.letterIndex == lastLetterIndex);
+                            }
 
                             // Check if the letter is in the correct position
                             bool isCorrectPosition = isLetterInCorrectPosition(rowIndex, colIndex);
@@ -627,7 +1055,6 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
               ),
             ),
             SizedBox(height: 8),
-            // Removed the Text widget that contained "Letters in correct position (dark blue) can't be swapped."
             firstSelectedPosition != null
                 ? Text(
               "Select another letter to swap...",
