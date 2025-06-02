@@ -69,6 +69,9 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
   Set<int> completedWords = Set<int>();
   List<String> shownDescriptions = [];
 
+  // Define swap groups for restricted swapping
+  List<List<List<int>>> swapGroups = [];
+
   @override
   void initState() {
     super.initState();
@@ -103,6 +106,9 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
                 (_) => List.generate(numberData.length, (_) => false)
         );
 
+        // Initialize swap groups for the default dataset
+        _initializeSwapGroups();
+
         // Initialize the game with the loaded data
         initializeGame();
       });
@@ -113,6 +119,62 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
         SnackBar(content: Text('Failed to load game data. Please try again.')),
       );
     }
+  }
+
+  // Initialize swap groups based on the original swapping pattern
+  void _initializeSwapGroups() {
+    if (numberData.length == 4 &&
+        numberData[0].answer == "RENEWABLE" &&
+        numberData[1].answer == "PLASTIC" &&
+        numberData[2].answer == "FOREST" &&
+        numberData[3].answer == "SEA") {
+
+      swapGroups = [
+        // Swap 1: E (1,0) and P (0,1)
+        [[1, 0], [0, 1]],
+
+        // Swap 2: N (2,0), L (1,1), F (0,2)
+        [[2, 0], [1, 1], [0, 2]],
+
+        // Swap 3: E (3,0), A (2,1), S (1,2), E (0,3)
+        [[3, 0], [2, 1], [1, 2], [0, 3]],
+
+        // Swap 4: W (4,0), S (3,1), T (2,2), A (1,3)
+        [[4, 0], [3, 1], [2, 2], [1, 3]],
+
+        // Swap 5: A (5,0), T (4,1), (3,2) - only 3 positions
+        [[5, 0], [4, 1], [3, 2]],
+
+        // Swap 6: B (6,0), I (5,1), (4,2) - only 3 positions
+        [[6, 0], [5, 1], [4, 2]],
+
+        // Swap 7: L (7,0), C (6,1), (5,2) - only 3 positions
+        [[7, 0], [6, 1], [5, 2]]
+      ];
+    } else {
+      // For other datasets, allow free swapping (empty swap groups)
+      swapGroups = [];
+    }
+  }
+
+  // Check if two positions are in the same swap group
+  bool _areInSameSwapGroup(int row1, int col1, int row2, int col2) {
+    // If no swap groups defined, allow all swaps
+    if (swapGroups.isEmpty) return true;
+
+    for (var group in swapGroups) {
+      bool found1 = false, found2 = false;
+
+      for (var position in group) {
+        if (position[0] == row1 && position[1] == col1) found1 = true;
+        if (position[0] == row2 && position[1] == col2) found2 = true;
+      }
+
+      // If both positions are in the same group, allow swap
+      if (found1 && found2) return true;
+    }
+
+    return false;
   }
 
   // Update letter values to match the current grid arrangement
@@ -174,318 +236,116 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
   }
 
   // Show description dialog for a completed word
-  // Replace your showDescriptionDialog method with this enhanced version
-
   void showDescriptionDialog(int wordIndex) {
     String number = numberData[wordIndex].number;
     String answer = numberData[wordIndex].answer;
     String description = numberData[wordIndex].description;
 
-    showGeneralDialog(
+    showDialog(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black45,
-      transitionDuration: const Duration(milliseconds: 400),
-      transitionBuilder: (context, anim1, anim2, child) {
-        return SlideTransition(
-          position: Tween(
-            begin: const Offset(0, -1),
-            end: const Offset(0, 0),
-          ).animate(CurvedAnimation(
-            parent: anim1,
-            curve: Curves.bounceOut,
-          )),
-          child: FadeTransition(
-            opacity: anim1,
-            child: child,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-        );
-      },
-      pageBuilder: (context, anim1, anim2) {
-        return Center(
-          child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 20),
+          contentPadding: EdgeInsets.zero,
+          content: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
                 colors: [
                   Colors.blue[50]!,
-                  Colors.purple[50]!,
-                  Colors.pink[50]!,
+                  Colors.blue[100]!,
                 ],
               ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.3),
-                  blurRadius: 20,
-                  spreadRadius: 5,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title
+                Text(
+                  "🎉 Well Done!",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue[900],
+                  ),
+                ),
+
+                SizedBox(height: 16),
+
+                // Number = Answer
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[900],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "$number = $answer",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: 16),
+
+                // Did you know section
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.blue[200]!,
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Did you know?",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Animated celebration icon
-                    TweenAnimationBuilder<double>(
-                      duration: Duration(milliseconds: 800),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: value,
-                          child: Transform.rotate(
-                            angle: value * 0.5,
-                            child: Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: RadialGradient(
-                                  colors: [
-                                    Colors.yellow[300]!,
-                                    Colors.orange[400]!,
-                                  ],
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.orange.withOpacity(0.4),
-                                    blurRadius: 15,
-                                    spreadRadius: 3,
-                                  ),
-                                ],
-                              ),
-                              child: Icon(
-                                Icons.celebration,
-                                size: 40,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    SizedBox(height: 16),
-
-                    // Animated title
-                    TweenAnimationBuilder<double>(
-                      duration: Duration(milliseconds: 600),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Opacity(
-                          opacity: value,
-                          child: Transform.translate(
-                            offset: Offset(0, 20 * (1 - value)),
-                            child: ShaderMask(
-                              shaderCallback: (bounds) => LinearGradient(
-                                colors: [
-                                  Colors.purple[600]!,
-                                  Colors.blue[600]!,
-                                  Colors.teal[600]!,
-                                ],
-                              ).createShader(bounds),
-                              child: Text(
-                                "🎉 Amazing! 🎉",
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    SizedBox(height: 20),
-
-                    // Word completion info with animated background
-                    TweenAnimationBuilder<double>(
-                      duration: Duration(milliseconds: 800),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: 0.8 + (0.2 * value),
-                          child: Container(
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.blue[600]!.withOpacity(0.8),
-                                  Colors.purple[600]!.withOpacity(0.8),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
-                                width: 2,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.check_circle,
-                                        color: Colors.white, size: 24),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      "You completed:",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 8),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    "$number = $answer",
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[800],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    SizedBox(height: 20),
-
-                    // Description section with fade-in animation
-                    TweenAnimationBuilder<double>(
-                      duration: Duration(milliseconds: 1000),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Opacity(
-                          opacity: value,
-                          child: Container(
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.9),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.blue[200]!,
-                                width: 1,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.info_outline,
-                                        color: Colors.blue[700], size: 20),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      "Did you know?",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue[700],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  description,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    height: 1.4,
-                                    color: Colors.grey[800],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    SizedBox(height: 24),
-
-                    // Animated button
-                    TweenAnimationBuilder<double>(
-                      duration: Duration(milliseconds: 1200),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: value,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(25),
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.green[400]!,
-                                  Colors.teal[400]!,
-                                ],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.green.withOpacity(0.3),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(25),
-                                onTap: () => Navigator.pop(context),
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 32, vertical: 12),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.thumb_up,
-                                          color: Colors.white, size: 20),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        "Awesome!",
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                "Great!",
+                style: TextStyle(
+                  color: Colors.blue[900],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
             ),
-          ),
+          ],
         );
       },
     );
@@ -536,6 +396,24 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
           ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text("Letters in the correct position cannot be swapped."),
+                duration: Duration(seconds: 2),
+              )
+          );
+
+          // Reset the first selection
+          selectedCells[firstSelectedRow!][firstSelectedCol!] = false;
+          firstSelectedPosition = null;
+          firstSelectedRow = null;
+          firstSelectedCol = null;
+          return;
+        }
+
+        // Check if the two selected letters are in the same swap group
+        if (!_areInSameSwapGroup(firstSelectedRow!, firstSelectedCol!, row, col)) {
+          // Show message about restricted swapping
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Only letters within the same row can be swapped."),
                 duration: Duration(seconds: 2),
               )
           );
@@ -877,197 +755,197 @@ class _NumberMatchingGameState extends State<NumberMatchingGame> with WidgetsBin
     }
 
     return Scaffold(
-      backgroundColor: Color(0xFFF5F5F7),
-      // Disable resizeToAvoidBottomInset to prevent keyboard from pushing up content
-      resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        title: Text(
-          "Number Game",
-          style: TextStyle(
-            color: Colors.blue[900],
-            fontWeight: FontWeight.bold,
+        backgroundColor: Color(0xFFF5F5F7),
+    // Disable resizeToAvoidBottomInset to prevent keyboard from pushing up content
+    resizeToAvoidBottomInset: false,
+    appBar: AppBar(
+    title: Text(
+    "Number Game",
+    style: TextStyle(
+    color: Colors.blue[900],
+    fontWeight: FontWeight.bold,
+    ),
+    ),
+    centerTitle: true,
+    backgroundColor: Colors.white60,
+    ),
+    body: SingleChildScrollView(
+    // Disable keyboard focus when tapping in the scrollable area
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    child: Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+    SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    child: Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: List.generate(numberData.length, (colIndex) {
+    return Padding(
+    padding: colIndex < numberPaddings.length
+    ? numberPaddings[colIndex]
+        : EdgeInsets.only(left: 20.0, top: colIndex * 30.0),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+    Text(
+    numberData[colIndex].number,
+    style: TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    color: Colors.blue[900],
+    ),
+    ),
+    SizedBox(height: 4),
+    Icon(Icons.arrow_downward, size: 16, color: Colors.blue[900]),
+    SizedBox(height: 8),
+    Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: List.generate(maxRows, (rowIndex) {
+    LetterPosition? position = letterGrid[rowIndex][colIndex];
+
+    // Skip rendering if there's no letter at this position
+    if (position == null) {
+    return SizedBox.shrink();
+    }
+
+    // Determine if this is a fixed position (first or last letter of first word)
+    bool isFixed = (position.wordIndex == 0 &&
+        (position.letterIndex == 0 ||
+            position.letterIndex == numberData[0].answer.length - 1));
+
+    // If we have at least 4 words, also fix last letter of last word like in original code
+    if (numberData.length >= 4) {
+      int lastWordIndex = numberData.length - 1;
+      int lastLetterIndex = numberData[lastWordIndex].answer.length - 1;
+      isFixed = isFixed || (position.wordIndex == lastWordIndex &&
+          position.letterIndex == lastLetterIndex);
+    }
+
+    // Check if the letter is in the correct position
+    bool isCorrectPosition = isLetterInCorrectPosition(rowIndex, colIndex);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4.0),
+      child: Material(
+        color: Colors.transparent,
+        shape: CircleBorder(),
+        clipBehavior: Clip.hardEdge,
+        child: InkWell(
+          onTap: () {
+            // Hide keyboard and trigger letter selection
+            FocusScope.of(context).unfocus();
+            SystemChannels.textInput.invokeMethod('TextInput.hide');
+            selectLetter(rowIndex, colIndex);
+          },
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selectedCells[rowIndex][colIndex]
+                    ? Colors.blue
+                    : Colors.black,
+                width: selectedCells[rowIndex][colIndex] ? 3 : 2,
+              ),
+              color: isFixed || isCorrectPosition ? Colors.blue[900] : null,
+            ),
+            child: Center(
+              child: Text(
+                letterValues[colIndex][rowIndex],
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isFixed || isCorrectPosition ? Colors.white : Colors.black,
+                ),
+              ),
+            ),
           ),
         ),
-        centerTitle: true,
-        backgroundColor: Colors.white60,
       ),
-      body: SingleChildScrollView(
-        // Disable keyboard focus when tapping in the scrollable area
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: List.generate(numberData.length, (colIndex) {
-                  return Padding(
-                    padding: colIndex < numberPaddings.length
-                        ? numberPaddings[colIndex]
-                        : EdgeInsets.only(left: 20.0, top: colIndex * 30.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          numberData[colIndex].number,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue[900],
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Icon(Icons.arrow_downward, size: 16, color: Colors.blue[900]),
-                        SizedBox(height: 8),
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(maxRows, (rowIndex) {
-                            LetterPosition? position = letterGrid[rowIndex][colIndex];
-
-                            // Skip rendering if there's no letter at this position
-                            if (position == null) {
-                              return SizedBox.shrink();
-                            }
-
-                            // Determine if this is a fixed position (first or last letter of first word)
-                            bool isFixed = (position.wordIndex == 0 &&
-                                (position.letterIndex == 0 ||
-                                    position.letterIndex == numberData[0].answer.length - 1));
-
-                            // If we have at least 4 words, also fix last letter of last word like in original code
-                            if (numberData.length >= 4) {
-                              int lastWordIndex = numberData.length - 1;
-                              int lastLetterIndex = numberData[lastWordIndex].answer.length - 1;
-                              isFixed = isFixed || (position.wordIndex == lastWordIndex &&
-                                  position.letterIndex == lastLetterIndex);
-                            }
-
-                            // Check if the letter is in the correct position
-                            bool isCorrectPosition = isLetterInCorrectPosition(rowIndex, colIndex);
-
-                            return Padding(
-                              padding: EdgeInsets.symmetric(vertical: 4.0),
-                              child: Material(
-                                color: Colors.transparent,
-                                shape: CircleBorder(),
-                                clipBehavior: Clip.hardEdge,
-                                child: InkWell(
-                                  onTap: () {
-                                    // Hide keyboard and trigger letter selection
-                                    FocusScope.of(context).unfocus();
-                                    SystemChannels.textInput.invokeMethod('TextInput.hide');
-                                    selectLetter(rowIndex, colIndex);
-                                  },
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: selectedCells[rowIndex][colIndex]
-                                            ? Colors.blue
-                                            : Colors.black,
-                                        width: selectedCells[rowIndex][colIndex] ? 3 : 2,
-                                      ),
-                                      color: isFixed || isCorrectPosition ? Colors.blue[900] : null,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        letterValues[colIndex][rowIndex],
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: isFixed || isCorrectPosition ? Colors.white : Colors.black,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+    );
+    }),
+    ),
+    ],
+    ),
+    );
+    }),
+    ),
+    ),
+      SizedBox(height: 30),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            onPressed: () {
+              SystemChannels.textInput.invokeMethod('TextInput.hide');
+              submitAnswers();
+            },
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              backgroundColor: Colors.blue[900],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
-            SizedBox(height: 30),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    SystemChannels.textInput.invokeMethod('TextInput.hide');
-                    submitAnswers();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    backgroundColor: Colors.blue[900],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    "Submit",
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                SizedBox(width: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    SystemChannels.textInput.invokeMethod('TextInput.hide');
-                    resetGame();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    "Reset",
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-            Text(
-              "Tap on letters to swap them!",
+            child: Text(
+              "Submit",
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 18,
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue[900],
               ),
             ),
-            SizedBox(height: 8),
-            firstSelectedPosition != null
-                ? Text(
-              "Select another letter to swap...",
-              style: TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: Colors.blue,
+          ),
+          SizedBox(width: 20),
+          ElevatedButton(
+            onPressed: () {
+              SystemChannels.textInput.invokeMethod('TextInput.hide');
+              resetGame();
+            },
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-            )
-                : SizedBox.shrink(),
-          ],
+            ),
+            child: Text(
+              "Reset",
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+      SizedBox(height: 20),
+      Text(
+        "Tap on letters to swap them!",
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: Colors.blue[900],
         ),
       ),
+      SizedBox(height: 8),
+      firstSelectedPosition != null
+          ? Text(
+        "Select another letter to swap...",
+        style: TextStyle(
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
+          color: Colors.blue,
+        ),
+      )
+          : SizedBox.shrink(),
+    ],
+    ),
+    ),
     );
   }
 }
